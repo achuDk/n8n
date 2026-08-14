@@ -43,6 +43,30 @@ export class RunDataPanel {
 		return this.root.getByTestId('ndv-data-container');
 	}
 
+	/** Container holding the node's warnings/hints, above the data */
+	getHintsContainer() {
+		return this.root.getByTestId('run-data-hints');
+	}
+
+	getNodeHints() {
+		return this.root.getByTestId('node-hint');
+	}
+
+	/** Summary line of a collapsed hint group, e.g. "20 fields weren't found in your input items" */
+	getNodeHintSummary() {
+		return this.root.getByTestId('node-hint-summary');
+	}
+
+	/** Chevron that expands a hint group */
+	getNodeHintToggle() {
+		return this.root.getByTestId('node-hint-toggle');
+	}
+
+	/** Individual messages inside an expanded hint group */
+	getNodeHintMessages() {
+		return this.root.getByTestId('node-hint-message');
+	}
+
 	getPagination() {
 		return this.root.getByTestId('ndv-data-pagination');
 	}

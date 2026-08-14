@@ -23,6 +23,8 @@ interface CalloutProps {
 	slim?: boolean;
 	roundCorners?: boolean;
 	onlyBottomBorder?: boolean;
+	/** Align the icon and content to the top instead of centring them — for callouts taller than one line */
+	alignTop?: boolean;
 }
 
 defineOptions({ name: 'N8nCallout' });
@@ -40,6 +42,7 @@ const classes = computed(() => [
 	props.slim ? $style.slim : '',
 	props.roundCorners ? $style.round : '',
 	props.onlyBottomBorder ? $style.onlyBottomBorder : '',
+	props.alignTop ? $style.alignTop : '',
 ]);
 
 const getIcon = computed(
@@ -120,6 +123,14 @@ const getIconSize = computed<IconSize>(() => {
 .messageSection {
 	display: flex;
 	align-items: center;
+}
+
+.alignTop {
+	align-items: flex-start;
+
+	.messageSection {
+		align-items: flex-start;
+	}
 }
 
 .info,
