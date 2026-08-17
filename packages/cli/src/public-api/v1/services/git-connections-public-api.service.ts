@@ -36,6 +36,18 @@ export class GitConnectionsPublicApiService {
 		await (await this.getService()).delete(id);
 	}
 
+	async assignProject(id: string, projectId: string) {
+		return await (await this.getService()).assignProject(id, projectId);
+	}
+
+	async unlinkProject(id: string, projectId: string) {
+		await (await this.getService()).unlinkProject(id, projectId);
+	}
+
+	async listProjects(id: string) {
+		return await (await this.getService()).listProjects(id);
+	}
+
 	private async getService() {
 		if (!this.moduleRegistry.isActive('git-connections')) {
 			throw new ServiceUnavailableError('Git connections module is not enabled');

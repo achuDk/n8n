@@ -101,6 +101,8 @@ export {
 	ConnectGitConnectionDto,
 	CreateGitConnectionDto,
 	GitConnectionListPublicDto,
+	GitConnectionProjectListPublicDto,
+	GitConnectionProjectPublicDto,
 	GitConnectionPublicDto,
 	ListGitConnectionsQueryDto,
 	UpdateGitConnectionDto,
