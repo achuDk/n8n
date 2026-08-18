@@ -14,6 +14,18 @@ export {
 } from './execution-cancelled.error';
 export { NodeApiError } from './node-api.error';
 export { NodeOperationError } from './node-operation.error';
+export {
+	PollFailureError,
+	RateLimitedError,
+	QuotaExhaustedError,
+	TemporarilyUnavailableError,
+	CredentialInvalidError,
+	ConfigurationInvalidError,
+	NodeDefectError,
+	pollFailureFromError,
+	type PollFailure,
+	type PollFailureClass,
+} from './poll-failure.error';
 export { WorkflowConfigurationError } from './workflow-configuration.error';
 export { NodeSslError } from './node-ssl.error';
 export { WebhookPathTakenError } from './webhook-taken.error';

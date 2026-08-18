@@ -392,6 +392,7 @@ describe('refreshOAuth2Token', () => {
 		await expect(promise).rejects.toMatchObject({
 			description: expect.stringContaining('reconnect'),
 			level: 'warning',
+			pollFailure: { failureClass: 'credential-invalid' },
 		});
 		expect(
 			mockAdditionalData.credentialsHelper.updateCredentialsOauthTokenData,

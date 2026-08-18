@@ -3,12 +3,21 @@ import type {
 	IPollFunctions,
 	IDataObject,
 	ILoadOptionsFunctions,
+	INode,
 	INodeExecutionData,
 	INodePropertyOptions,
 	INodeType,
 	INodeTypeDescription,
+	PollFailureError,
 } from 'n8n-workflow';
-import { NodeConnectionTypes, NodeApiError } from 'n8n-workflow';
+import {
+	NodeConnectionTypes,
+	NodeApiError,
+	ConfigurationInvalidError,
+	CredentialInvalidError,
+	QuotaExhaustedError,
+	RateLimitedError,
+} from 'n8n-workflow';
 
 import { GOOGLE_DRIVE_FILE_URL_REGEX, GOOGLE_DRIVE_FOLDER_URL_REGEX } from '../constants';
 import { extractId, googleApiRequest, googleApiRequestAllItems } from './v1/GenericFunctions';
@@ -479,12 +488,24 @@ export class GoogleDriveTrigger implements INodeType {
 
 		let files;
 
-		if (this.getMode() === 'manual') {
-			qs.pageSize = 1;
-			files = await googleApiRequest.call(this, 'GET', '/drive/v3/files', {}, qs);
-			files = files.files;
-		} else {
-			files = await googleApiRequestAllItems.call(this, 'files', 'GET', '/drive/v3/files', {}, qs);
+		try {
+			if (this.getMode() === 'manual') {
+				qs.pageSize = 1;
+				files = await googleApiRequest.call(this, 'GET', '/drive/v3/files', {}, qs);
+				files = files.files;
+			} else {
+				files = await googleApiRequestAllItems.call(
+					this,
+					'files',
+					'GET',
+					'/drive/v3/files',
+					{},
+					qs,
+				);
+			}
+		} catch (error) {
+			const watchesSpecificTarget = triggerOn === 'specificFolder' || triggerOn === 'specificFile';
+			throw declaredPollFailure(this.getNode(), error, watchesSpecificTarget) ?? error;
 		}
 
 		if (triggerOn === 'specificFile' && this.getMode() !== 'manual') {
@@ -519,4 +540,77 @@ export class GoogleDriveTrigger implements INodeType {
 
 		return null;
 	}
+}
+
+const RATE_LIMIT_REASONS = [
+	'rateLimitExceeded',
+	'userRateLimitExceeded',
+	'sharingRateLimitExceeded',
+];
+
+const NESTED_ERROR_KEYS = ['cause', 'error', 'errors', 'response', 'body', 'data'];
+
+function collectGoogleErrorReasons(
+	value: unknown,
+	reasons = new Set<string>(),
+	depth = 0,
+): Set<string> {
+	if (depth > 6 || typeof value !== 'object' || value === null) {
+		return reasons;
+	}
+
+	if (Array.isArray(value)) {
+		for (const entry of value) {
+			collectGoogleErrorReasons(entry, reasons, depth + 1);
+		}
+		return reasons;
+	}
+
+	const record = value as IDataObject;
+	if (typeof record.reason === 'string') {
+		reasons.add(record.reason);
+	}
+	for (const key of NESTED_ERROR_KEYS) {
+		collectGoogleErrorReasons(record[key], reasons, depth + 1);
+	}
+
+	return reasons;
+}
+
+/**
+ * The declared poll failure for a failed Drive API call, or `null` for
+ * anything this node cannot classify with confidence.
+ */
+function declaredPollFailure(
+	node: INode,
+	error: unknown,
+	watchesSpecificTarget: boolean,
+): PollFailureError | null {
+	if (!(error instanceof NodeApiError)) {
+		return null;
+	}
+
+	if (error.httpCode === '401') {
+		return new CredentialInvalidError(node, error);
+	}
+
+	if (error.httpCode === '403') {
+		const reasons = collectGoogleErrorReasons(error);
+		if (RATE_LIMIT_REASONS.some((reason) => reasons.has(reason))) {
+			return new RateLimitedError(node, error);
+		}
+		if (reasons.has('dailyLimitExceeded')) {
+			return new QuotaExhaustedError(node, error);
+		}
+		return null;
+	}
+
+	if (error.httpCode === '404' && watchesSpecificTarget) {
+		return new ConfigurationInvalidError(node, error, {
+			message:
+				'The file or folder this node watches no longer exists. Please update it in the workflow.',
+		});
+	}
+
+	return null;
 }

@@ -33,7 +33,7 @@ import type {
 import {
 	OperationalError,
 	jsonParse,
-	NodeOperationError,
+	CredentialInvalidError,
 	UserError,
 	UnexpectedError,
 } from 'n8n-workflow';
@@ -129,10 +129,10 @@ function isRevokedOAuth2GrantError(error: unknown): boolean {
 	return body?.error === 'invalid_grant';
 }
 
-function buildOAuth2ReconnectError(node: INode, credentialsType: string): NodeOperationError {
+function buildOAuth2ReconnectError(node: INode, credentialsType: string): CredentialInvalidError {
 	const credentialName = node.credentials?.[credentialsType]?.name;
 	const credentialLabel = credentialName ? `"${credentialName}"` : `of type "${credentialsType}"`;
-	return new NodeOperationError(
+	return new CredentialInvalidError(
 		node,
 		`The credential ${credentialLabel} needs to be reconnected.`,
 		{
