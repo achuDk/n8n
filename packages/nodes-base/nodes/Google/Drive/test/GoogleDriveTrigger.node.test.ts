@@ -506,6 +506,24 @@ describe('GoogleDriveTrigger', () => {
 			await expect(promise).rejects.toMatchObject({ pollFailure: { failureClass } });
 		});
 
+		it('should declare a 403 whose payload is a plain object stored under errorResponse', async () => {
+			const apiError = new NodeApiError(mockNode, {
+				statusCode: 403,
+				error: {
+					error: {
+						code: 403,
+						message: 'request failed',
+						errors: [{ domain: 'usageLimits', reason: 'userRateLimitExceeded' }],
+					},
+				},
+			} as never);
+			googleApiRequestAllItemsSpy.mockRejectedValue(apiError);
+
+			await expect(trigger.poll.call(mockPollFunctions)).rejects.toMatchObject({
+				pollFailure: { failureClass: 'rate-limited' },
+			});
+		});
+
 		it('should declare a 401 as credential-invalid', async () => {
 			googleApiRequestAllItemsSpy.mockRejectedValue(driveApiError(401));
 

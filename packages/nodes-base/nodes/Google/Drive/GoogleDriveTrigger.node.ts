@@ -548,7 +548,7 @@ const RATE_LIMIT_REASONS = [
 	'sharingRateLimitExceeded',
 ];
 
-const NESTED_ERROR_KEYS = ['cause', 'error', 'errors', 'response', 'body', 'data'];
+const NESTED_ERROR_KEYS = ['cause', 'errorResponse', 'error', 'errors', 'response', 'body', 'data'];
 
 function collectGoogleErrorReasons(
 	value: unknown,
