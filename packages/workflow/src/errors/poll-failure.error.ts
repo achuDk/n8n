@@ -166,7 +166,7 @@ function toPollFailure(value: unknown): PollFailure | null {
 		case 'rate-limited': {
 			const { retryAfterMs } = value;
 			const isValidDelay =
-				typeof retryAfterMs === 'number' && Number.isFinite(retryAfterMs) && retryAfterMs > 0;
+				typeof retryAfterMs === 'number' && Number.isFinite(retryAfterMs) && retryAfterMs >= 0;
 			return isValidDelay
 				? { failureClass: 'rate-limited', retryAfterMs }
 				: { failureClass: 'rate-limited' };

@@ -137,6 +137,17 @@ describe('pollFailureFromError', () => {
 		expect(pollFailureFromError(error)).toBeNull();
 	});
 
+	it('keeps a zero retry delay', () => {
+		const error = Object.assign(new Error('429'), {
+			pollFailure: { failureClass: 'rate-limited', retryAfterMs: 0 },
+		});
+
+		expect(pollFailureFromError(error)).toEqual({
+			failureClass: 'rate-limited',
+			retryAfterMs: 0,
+		});
+	});
+
 	it('drops malformed declaration data but keeps the class', () => {
 		const badDelay = Object.assign(new Error('429'), {
 			pollFailure: { failureClass: 'rate-limited', retryAfterMs: -5 },
