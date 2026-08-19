@@ -3,21 +3,12 @@ import type {
 	IPollFunctions,
 	IDataObject,
 	ILoadOptionsFunctions,
-	INode,
 	INodeExecutionData,
 	INodePropertyOptions,
 	INodeType,
 	INodeTypeDescription,
-	PollFailureError,
 } from 'n8n-workflow';
-import {
-	NodeConnectionTypes,
-	NodeApiError,
-	ConfigurationInvalidError,
-	CredentialInvalidError,
-	QuotaExhaustedError,
-	RateLimitedError,
-} from 'n8n-workflow';
+import { NodeConnectionTypes, NodeApiError, declarePollFailure } from 'n8n-workflow';
 
 import { GOOGLE_DRIVE_FILE_URL_REGEX, GOOGLE_DRIVE_FOLDER_URL_REGEX } from '../constants';
 import { extractId, googleApiRequest, googleApiRequestAllItems } from './v1/GenericFunctions';
@@ -507,7 +498,7 @@ export class GoogleDriveTrigger implements INodeType {
 				);
 			}
 		} catch (error) {
-			throw declaredPollFailure(this.getNode(), error, queryTargetsWatchedFolder) ?? error;
+			throw declaredPollFailure(error, queryTargetsWatchedFolder) ?? error;
 		}
 
 		if (triggerOn === 'specificFile' && this.getMode() !== 'manual') {
@@ -580,37 +571,37 @@ function collectGoogleErrorReasons(
 }
 
 /**
- * The declared poll failure for a failed Drive API call, or `null` for
- * anything this node cannot classify with confidence.
+ * Stamps the declared poll failure onto a failed Drive API call and returns
+ * the same error, or returns `null` for anything this node cannot classify
+ * with confidence. A 404 on the watched folder also gets a clearer message.
  */
 function declaredPollFailure(
-	node: INode,
 	error: unknown,
 	queryTargetsWatchedFolder: boolean,
-): PollFailureError | null {
+): NodeApiError | null {
 	if (!(error instanceof NodeApiError)) {
 		return null;
 	}
 
 	if (error.httpCode === '401') {
-		return new CredentialInvalidError(node, error);
+		return declarePollFailure(error, { failureClass: 'credential-invalid' });
 	}
 
 	if (error.httpCode === '403') {
 		const reasons = collectGoogleErrorReasons(error);
 		if (RATE_LIMIT_REASONS.some((reason) => reasons.has(reason))) {
-			return new RateLimitedError(node, error);
+			return declarePollFailure(error, { failureClass: 'rate-limited' });
 		}
 		if (reasons.has('dailyLimitExceeded')) {
-			return new QuotaExhaustedError(node, error);
+			return declarePollFailure(error, { failureClass: 'quota-exhausted' });
 		}
 		return null;
 	}
 
 	if (error.httpCode === '404' && queryTargetsWatchedFolder) {
-		return new ConfigurationInvalidError(node, error, {
-			message: 'The folder this node watches no longer exists. Please update it in the workflow.',
-		});
+		error.message =
+			'The folder this node watches no longer exists. Please update it in the workflow.';
+		return declarePollFailure(error, { failureClass: 'configuration-invalid' });
 	}
 
 	return null;

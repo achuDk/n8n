@@ -15,13 +15,7 @@ export {
 export { NodeApiError } from './node-api.error';
 export { NodeOperationError } from './node-operation.error';
 export {
-	PollFailureError,
-	RateLimitedError,
-	QuotaExhaustedError,
-	TemporarilyUnavailableError,
-	CredentialInvalidError,
-	ConfigurationInvalidError,
-	NodeDefectError,
+	declarePollFailure,
 	pollFailureFromError,
 	type PollFailure,
 	type PollFailureClass,

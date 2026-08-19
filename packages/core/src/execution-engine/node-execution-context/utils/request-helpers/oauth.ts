@@ -33,7 +33,8 @@ import type {
 import {
 	OperationalError,
 	jsonParse,
-	CredentialInvalidError,
+	NodeOperationError,
+	declarePollFailure,
 	UserError,
 	UnexpectedError,
 } from 'n8n-workflow';
@@ -129,10 +130,10 @@ function isRevokedOAuth2GrantError(error: unknown): boolean {
 	return body?.error === 'invalid_grant';
 }
 
-function buildOAuth2ReconnectError(node: INode, credentialsType: string): CredentialInvalidError {
+function buildOAuth2ReconnectError(node: INode, credentialsType: string): NodeOperationError {
 	const credentialName = node.credentials?.[credentialsType]?.name;
 	const credentialLabel = credentialName ? `"${credentialName}"` : `of type "${credentialsType}"`;
-	return new CredentialInvalidError(
+	const error = new NodeOperationError(
 		node,
 		`The credential ${credentialLabel} needs to be reconnected.`,
 		{
@@ -141,6 +142,7 @@ function buildOAuth2ReconnectError(node: INode, credentialsType: string): Creden
 			level: 'warning',
 		},
 	);
+	return declarePollFailure(error, { failureClass: 'credential-invalid' });
 }
 
 const inFlightRefreshes = new Map<string, Promise<ClientOAuth2Token>>();

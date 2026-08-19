@@ -499,11 +499,12 @@ describe('GoogleDriveTrigger', () => {
 			['sharingRateLimitExceeded', 'rate-limited'],
 			['dailyLimitExceeded', 'quota-exhausted'],
 		])('should declare a 403 with reason %s as %s', async (reason, failureClass) => {
-			googleApiRequestAllItemsSpy.mockRejectedValue(driveApiError(403, reason));
+			const apiError = driveApiError(403, reason);
+			googleApiRequestAllItemsSpy.mockRejectedValue(apiError);
 
-			const promise = trigger.poll.call(mockPollFunctions);
-
-			await expect(promise).rejects.toMatchObject({ pollFailure: { failureClass } });
+			await expect(trigger.poll.call(mockPollFunctions)).rejects.toBe(apiError);
+			expect(pollFailureFromError(apiError)).toEqual({ failureClass });
+			expect(apiError.httpCode).toBe('403');
 		});
 
 		it('should declare a 403 whose payload is a plain object stored under errorResponse', async () => {
@@ -519,17 +520,17 @@ describe('GoogleDriveTrigger', () => {
 			} as never);
 			googleApiRequestAllItemsSpy.mockRejectedValue(apiError);
 
-			await expect(trigger.poll.call(mockPollFunctions)).rejects.toMatchObject({
-				pollFailure: { failureClass: 'rate-limited' },
-			});
+			await expect(trigger.poll.call(mockPollFunctions)).rejects.toBe(apiError);
+			expect(pollFailureFromError(apiError)).toEqual({ failureClass: 'rate-limited' });
 		});
 
 		it('should declare a 401 as credential-invalid', async () => {
-			googleApiRequestAllItemsSpy.mockRejectedValue(driveApiError(401));
+			const apiError = driveApiError(401);
+			googleApiRequestAllItemsSpy.mockRejectedValue(apiError);
 
-			await expect(trigger.poll.call(mockPollFunctions)).rejects.toMatchObject({
-				pollFailure: { failureClass: 'credential-invalid' },
-			});
+			await expect(trigger.poll.call(mockPollFunctions)).rejects.toBe(apiError);
+			expect(pollFailureFromError(apiError)).toEqual({ failureClass: 'credential-invalid' });
+			expect(apiError.httpCode).toBe('401');
 		});
 
 		it('should declare a 404 as configuration-invalid when the query filters on the watched folder', async () => {
@@ -539,14 +540,14 @@ describe('GoogleDriveTrigger', () => {
 				folderToWatch: 'test-folder-id',
 				options: {},
 			});
-			googleApiRequestAllItemsSpy.mockRejectedValue(driveApiError(404));
+			const apiError = driveApiError(404);
+			googleApiRequestAllItemsSpy.mockRejectedValue(apiError);
 
-			const promise = trigger.poll.call(mockPollFunctions);
-
-			await expect(promise).rejects.toMatchObject({
-				pollFailure: { failureClass: 'configuration-invalid' },
-				message: 'The folder this node watches no longer exists. Please update it in the workflow.',
-			});
+			await expect(trigger.poll.call(mockPollFunctions)).rejects.toBe(apiError);
+			expect(pollFailureFromError(apiError)).toEqual({ failureClass: 'configuration-invalid' });
+			expect(apiError.message).toBe(
+				'The folder this node watches no longer exists. Please update it in the workflow.',
+			);
 		});
 
 		it.each([

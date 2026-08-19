@@ -1,152 +1,36 @@
-import type { NodeOperationErrorOptions } from './node-api.error';
-import { NodeOperationError } from './node-operation.error';
-import type { INode, JsonObject } from '../interfaces';
-
 /**
- * Why a poll failed, declared by the node that polled. Plain data read off a
+ * Why a poll failed, declared by the node that polled. Plain data stamped on a
  * thrown error, so it survives wrapping and duplicated copies of this package.
  */
 export type PollFailure =
+	/** The source is throttling requests. Retryable and must not count as a failing source. */
 	| { failureClass: 'rate-limited'; retryAfterMs?: number }
+	/** A usage quota is used up until it resets. Retryable and must not count as a failing source. */
 	| { failureClass: 'quota-exhausted'; resetsAt?: Date }
+	/** The source is down or degraded right now. Retryable on the usual backoff curve. */
 	| { failureClass: 'temporarily-unavailable' }
+	/** The credential is proven dead. Not retryable, the user must reconnect it. */
 	| { failureClass: 'credential-invalid' }
+	/** The node points at something that no longer exists or is no longer allowed. Not retryable, the user must edit the workflow. */
 	| { failureClass: 'configuration-invalid' }
+	/** A bug in the node itself. Not retryable, and neither the credential nor the configuration is to blame. */
 	| { failureClass: 'node-defect' };
 
 export type PollFailureClass = PollFailure['failureClass'];
 
 /**
- * Base of the declared poll failure errors. A poll trigger node throws one to
- * say why its poll failed instead of leaving the platform to guess from the
- * HTTP status. The declaration is stamped as the plain `pollFailure` property,
- * which {@link pollFailureFromError} reads back.
- *
- * Wrapping an existing `NodeOperationError` keeps that instance and only adds
- * the declaration to it. Outside a poll the declaration is inert metadata.
+ * Stamps the declared failure onto `error` and returns the same instance, so
+ * the error keeps its class, name, message and every other property. A poll
+ * trigger node throws the stamped error to say why its poll failed instead of
+ * leaving the platform to guess from the HTTP status.
+ * {@link pollFailureFromError} reads the declaration back. Outside a poll the
+ * declaration is inert metadata.
  */
-export abstract class PollFailureError extends NodeOperationError {
-	readonly pollFailure: PollFailure;
-
-	constructor(
-		node: INode,
-		error: Error | string | JsonObject,
-		failure: PollFailure,
-		defaultMessage: string,
-		options: NodeOperationErrorOptions = {},
-	) {
-		super(node, error, {
-			...options,
-			message: options.message ?? (typeof error === 'string' ? undefined : defaultMessage),
-		});
-		// Assigned after super so the stamp also lands when the parent constructor
-		// returns the already-wrapped error instead of this instance.
-		this.pollFailure = failure;
-	}
-}
-
-/** The source is throttling requests. Retryable and must not count as a failing source. */
-export class RateLimitedError extends PollFailureError {
-	constructor(
-		node: INode,
-		error: Error | string | JsonObject,
-		options: NodeOperationErrorOptions & { retryAfterMs?: number } = {},
-	) {
-		const { retryAfterMs, ...rest } = options;
-		super(
-			node,
-			error,
-			{ failureClass: 'rate-limited', ...(retryAfterMs === undefined ? {} : { retryAfterMs }) },
-			'The service is rate limiting requests. Polling continues once the limit lifts.',
-			rest,
-		);
-	}
-}
-
-/** A usage quota is used up until it resets. Retryable and must not count as a failing source. */
-export class QuotaExhaustedError extends PollFailureError {
-	constructor(
-		node: INode,
-		error: Error | string | JsonObject,
-		options: NodeOperationErrorOptions & { resetsAt?: Date } = {},
-	) {
-		const { resetsAt, ...rest } = options;
-		super(
-			node,
-			error,
-			{ failureClass: 'quota-exhausted', ...(resetsAt === undefined ? {} : { resetsAt }) },
-			'The service quota is used up. Polling continues once it resets.',
-			rest,
-		);
-	}
-}
-
-/** The source is down or degraded right now. Retryable on the usual backoff curve. */
-export class TemporarilyUnavailableError extends PollFailureError {
-	constructor(
-		node: INode,
-		error: Error | string | JsonObject,
-		options: NodeOperationErrorOptions = {},
-	) {
-		super(
-			node,
-			error,
-			{ failureClass: 'temporarily-unavailable' },
-			'The service is temporarily unavailable.',
-			options,
-		);
-	}
-}
-
-/** The credential is proven dead. Not retryable, the user must reconnect it. */
-export class CredentialInvalidError extends PollFailureError {
-	constructor(
-		node: INode,
-		error: Error | string | JsonObject,
-		options: NodeOperationErrorOptions = {},
-	) {
-		super(
-			node,
-			error,
-			{ failureClass: 'credential-invalid' },
-			'The credential connected to this node is no longer valid. Please reconnect it.',
-			options,
-		);
-	}
-}
-
-/** The node points at something that no longer exists or is no longer allowed. Not retryable, the user must edit the workflow. */
-export class ConfigurationInvalidError extends PollFailureError {
-	constructor(
-		node: INode,
-		error: Error | string | JsonObject,
-		options: NodeOperationErrorOptions = {},
-	) {
-		super(
-			node,
-			error,
-			{ failureClass: 'configuration-invalid' },
-			'The node configuration is no longer valid. Please update it in the workflow.',
-			options,
-		);
-	}
-}
-
-/** A bug in the node itself. Not retryable, and neither the credential nor the configuration is to blame. */
-export class NodeDefectError extends PollFailureError {
-	constructor(
-		node: INode,
-		error: Error | string | JsonObject,
-		options: NodeOperationErrorOptions = {},
-	) {
-		super(
-			node,
-			error,
-			{ failureClass: 'node-defect' },
-			'The node hit a problem in its own code and cannot recover on its own.',
-			options,
-		);
-	}
+export function declarePollFailure<T extends object>(
+	error: T,
+	failure: PollFailure,
+): T & { pollFailure: PollFailure } {
+	return Object.assign(error, { pollFailure: failure });
 }
 
 const MAX_CHAIN_DEPTH = 5;

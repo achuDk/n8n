@@ -1,16 +1,4 @@
-import {
-	ConfigurationInvalidError,
-	CredentialInvalidError,
-	NodeApiError,
-	NodeDefectError,
-	NodeOperationError,
-	pollFailureFromError,
-	PollFailureError,
-	QuotaExhaustedError,
-	RateLimitedError,
-	TemporarilyUnavailableError,
-	type PollFailure,
-} from '../../src/errors';
+import { NodeApiError, declarePollFailure, pollFailureFromError } from '../../src/errors';
 import type { INode } from '../../src/interfaces';
 
 const node: INode = {
@@ -22,70 +10,47 @@ const node: INode = {
 	parameters: {},
 };
 
-describe('poll failure errors', () => {
-	it.each<[new (n: INode, e: Error) => PollFailureError, PollFailure['failureClass']]>([
-		[RateLimitedError, 'rate-limited'],
-		[QuotaExhaustedError, 'quota-exhausted'],
-		[TemporarilyUnavailableError, 'temporarily-unavailable'],
-		[CredentialInvalidError, 'credential-invalid'],
-		[ConfigurationInvalidError, 'configuration-invalid'],
-		[NodeDefectError, 'node-defect'],
-	])('%p declares its failure class', (errorClass, failureClass) => {
-		const error = new errorClass(node, new Error('upstream failure'));
+describe('declarePollFailure', () => {
+	it('stamps the failure onto the same error instance', () => {
+		const error = new NodeApiError(node, { message: 'api failure', httpCode: '401' });
 
-		expect(error).toBeInstanceOf(PollFailureError);
-		expect(error).toBeInstanceOf(NodeOperationError);
-		expect(error.pollFailure).toEqual({ failureClass });
+		const declared = declarePollFailure(error, { failureClass: 'credential-invalid' });
+
+		expect(declared).toBe(error);
+		expect(declared.name).toBe('NodeApiError');
+		expect(declared.httpCode).toBe('401');
+		expect(declared.pollFailure).toEqual({ failureClass: 'credential-invalid' });
 	});
 
 	it('carries the declared retry delay', () => {
-		const error = new RateLimitedError(node, new Error('429'), { retryAfterMs: 30_000 });
+		const error = declarePollFailure(new Error('429'), {
+			failureClass: 'rate-limited',
+			retryAfterMs: 30_000,
+		});
 
-		expect(error.pollFailure).toEqual({ failureClass: 'rate-limited', retryAfterMs: 30_000 });
+		expect(pollFailureFromError(error)).toEqual({
+			failureClass: 'rate-limited',
+			retryAfterMs: 30_000,
+		});
 	});
 
 	it('carries the declared quota reset time', () => {
 		const resetsAt = new Date('2026-08-19T00:00:00.000Z');
-		const error = new QuotaExhaustedError(node, new Error('quota'), { resetsAt });
-
-		expect(error.pollFailure).toEqual({ failureClass: 'quota-exhausted', resetsAt });
-	});
-
-	it('replaces a wrapped error message with the class default', () => {
-		const error = new CredentialInvalidError(node, new Error('invalid_grant'));
-
-		expect(error.message).toBe(
-			'The credential connected to this node is no longer valid. Please reconnect it.',
-		);
-	});
-
-	it('keeps an explicit message over the class default', () => {
-		const error = new ConfigurationInvalidError(node, new Error('404'), {
-			message: 'The watched folder no longer exists.',
+		const error = declarePollFailure(new Error('quota'), {
+			failureClass: 'quota-exhausted',
+			resetsAt,
 		});
 
-		expect(error.message).toBe('The watched folder no longer exists.');
-	});
-
-	it('uses a string error as the message', () => {
-		const error = new CredentialInvalidError(node, 'Please reconnect the credential.');
-
-		expect(error.message).toBe('Please reconnect the credential.');
-	});
-
-	it('stamps the original error when wrapping an existing NodeOperationError', () => {
-		const original = new NodeOperationError(node, new Error('boom'));
-
-		const wrapped = new CredentialInvalidError(node, original);
-
-		expect(wrapped).toBe(original);
-		expect(pollFailureFromError(wrapped)).toEqual({ failureClass: 'credential-invalid' });
+		expect(pollFailureFromError(error)).toEqual({ failureClass: 'quota-exhausted', resetsAt });
 	});
 });
 
 describe('pollFailureFromError', () => {
 	it('reads the declaration off the thrown error itself', () => {
-		const error = new RateLimitedError(node, new Error('429'), { retryAfterMs: 1000 });
+		const error = declarePollFailure(new Error('429'), {
+			failureClass: 'rate-limited',
+			retryAfterMs: 1000,
+		});
 
 		expect(pollFailureFromError(error)).toEqual({
 			failureClass: 'rate-limited',
@@ -94,7 +59,7 @@ describe('pollFailureFromError', () => {
 	});
 
 	it('reads the declaration through wrapping errors', () => {
-		const declared = new QuotaExhaustedError(node, new Error('quota'));
+		const declared = declarePollFailure(new Error('quota'), { failureClass: 'quota-exhausted' });
 		const wrapped = new NodeApiError(node, declared as never);
 		const doubleWrapped = new Error('outer', { cause: wrapped });
 
@@ -113,10 +78,11 @@ describe('pollFailureFromError', () => {
 	});
 
 	it('prefers the shallowest declaration', () => {
-		const inner = new TemporarilyUnavailableError(node, new Error('503'));
-		const outer = Object.assign(new Error('outer'), {
-			pollFailure: { failureClass: 'credential-invalid' },
-			cause: inner,
+		const inner = declarePollFailure(new Error('503'), {
+			failureClass: 'temporarily-unavailable',
+		});
+		const outer = declarePollFailure(new Error('outer', { cause: inner }), {
+			failureClass: 'credential-invalid',
 		});
 
 		expect(pollFailureFromError(outer)).toEqual({ failureClass: 'credential-invalid' });
