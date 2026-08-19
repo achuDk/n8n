@@ -452,7 +452,10 @@ export class GoogleDriveTrigger implements INodeType {
 
 		const query = ['trashed = false'];
 
-		if (triggerOn === 'specificFolder' && event !== 'watchFolderUpdated') {
+		const queryTargetsWatchedFolder =
+			triggerOn === 'specificFolder' && event !== 'watchFolderUpdated';
+
+		if (queryTargetsWatchedFolder) {
 			const folderToWatch = extractId(
 				this.getNodeParameter('folderToWatch', '', { extractValue: true }) as string,
 			);
@@ -504,8 +507,7 @@ export class GoogleDriveTrigger implements INodeType {
 				);
 			}
 		} catch (error) {
-			const watchesSpecificTarget = triggerOn === 'specificFolder' || triggerOn === 'specificFile';
-			throw declaredPollFailure(this.getNode(), error, watchesSpecificTarget) ?? error;
+			throw declaredPollFailure(this.getNode(), error, queryTargetsWatchedFolder) ?? error;
 		}
 
 		if (triggerOn === 'specificFile' && this.getMode() !== 'manual') {
@@ -584,7 +586,7 @@ function collectGoogleErrorReasons(
 function declaredPollFailure(
 	node: INode,
 	error: unknown,
-	watchesSpecificTarget: boolean,
+	queryTargetsWatchedFolder: boolean,
 ): PollFailureError | null {
 	if (!(error instanceof NodeApiError)) {
 		return null;
@@ -605,10 +607,9 @@ function declaredPollFailure(
 		return null;
 	}
 
-	if (error.httpCode === '404' && watchesSpecificTarget) {
+	if (error.httpCode === '404' && queryTargetsWatchedFolder) {
 		return new ConfigurationInvalidError(node, error, {
-			message:
-				'The file or folder this node watches no longer exists. Please update it in the workflow.',
+			message: 'The folder this node watches no longer exists. Please update it in the workflow.',
 		});
 	}
 

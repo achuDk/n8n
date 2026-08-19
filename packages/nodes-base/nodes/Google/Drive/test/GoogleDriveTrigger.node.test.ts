@@ -532,20 +532,45 @@ describe('GoogleDriveTrigger', () => {
 			});
 		});
 
-		it('should declare a 404 as configuration-invalid when watching a specific file', async () => {
+		it('should declare a 404 as configuration-invalid when the query filters on the watched folder', async () => {
+			setParameters({
+				triggerOn: 'specificFolder',
+				event: 'fileCreated',
+				folderToWatch: 'test-folder-id',
+				options: {},
+			});
 			googleApiRequestAllItemsSpy.mockRejectedValue(driveApiError(404));
 
 			const promise = trigger.poll.call(mockPollFunctions);
 
 			await expect(promise).rejects.toMatchObject({
 				pollFailure: { failureClass: 'configuration-invalid' },
-				message:
-					'The file or folder this node watches no longer exists. Please update it in the workflow.',
+				message: 'The folder this node watches no longer exists. Please update it in the workflow.',
 			});
 		});
 
-		it('should not declare a 404 when watching any file or folder', async () => {
-			setParameters({ triggerOn: 'anyFileFolder', event: 'fileUpdated', options: {} });
+		it.each([
+			['any file or folder', { triggerOn: 'anyFileFolder', event: 'fileUpdated', options: {} }],
+			[
+				'a specific file, whose id never reaches the API',
+				{
+					triggerOn: 'specificFile',
+					event: 'fileUpdated',
+					fileToWatch: 'test-file-id',
+					options: {},
+				},
+			],
+			[
+				'a specific folder for updates, whose id never reaches the API',
+				{
+					triggerOn: 'specificFolder',
+					event: 'watchFolderUpdated',
+					folderToWatch: 'test-folder-id',
+					options: {},
+				},
+			],
+		])('should not declare a 404 when watching %s', async (_name, params) => {
+			setParameters(params);
 			const apiError = driveApiError(404);
 			googleApiRequestAllItemsSpy.mockRejectedValue(apiError);
 
